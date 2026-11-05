@@ -648,7 +648,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v1';
+document.getElementById('verTag').textContent = 'Snake Park Pi v2';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -662,7 +662,7 @@ function onIncompletePaymentFound(payment) { if (window.console) console.log('[p
 async function piBoot() {
   const gate = document.getElementById('pi-gate');
   let done = false;
-  const fail = () => { if (done) return; done = true; piSetStatus(T('piNg')); startSync(); };
+  const fail = () => { if (done) return; done = true; const el = document.getElementById('piStatus'); if (el) el.innerHTML = esc(T('piNg')) + '<br><a href="https://snakeparkmocovs3958.pinet.com" style="color:#7ab8ff">snakeparkmocovs3958.pinet.com</a>'; startSync(); };
   const watchdog = setTimeout(fail, 60000); // authenticate/exchange may never answer (e.g. opened outside Pi Browser)
   try {
     if (!window.Pi || typeof Pi.init !== 'function' || typeof Pi.authenticate !== 'function') { clearTimeout(watchdog); fail(); return; }
