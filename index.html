@@ -51,7 +51,14 @@
             padding: 7px 16px; border-radius: 999px; border: 1px solid rgba(140,160,255,.4);
             background: rgba(10,14,30,.62); color: #dfe8ff; font-size: 13px; font-weight: 700; }
   .hidden { display: none !important; }
+  #pi-gate { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center;
+             justify-content: center; gap: 16px; background: linear-gradient(180deg, #141b3d, #0c1020);
+             text-align: center; padding: 24px; }
+  #pi-gate img { width: 104px; height: 104px; border-radius: 24px; }
+  #pi-gate h1 { font-size: 30px; font-weight: 800; color: #dfe8ff; }
+  #piStatus { font-size: 15px; color: #ffd76a; line-height: 1.7; max-width: 30em; }
 </style>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -63,6 +70,12 @@
 <div id="errLine"></div>
 <button id="boostBtn">ブースト</button>
 <button id="bgmBtn" class="bgmbtn">BGM：オン</button>
+
+<div id="pi-gate">
+  <img src="app-icon-1024.png" alt="">
+  <h1>スネークパーク</h1>
+  <p id="piStatus">Piに接続しています…</p>
+</div>
 
 <div id="startScr" class="screen">
   <h1 id="titleTxt">スネークパーク</h1>
@@ -111,12 +124,16 @@ const STR = {
         ph: '名前（例：アキラ）', play: 'あそぶ', how: 'PC：マウスで向き、押している間ブースト／ スマホ：指で向き、下のボタンでブースト',
         len: '長さ', rank: '順位', board: 'ランキング', boost: 'ブースト', over: 'ゲームオーバー', again: 'もう一度',
         finalLen: '最終の長さ： ', you: 'あなた', youDown: 'あなたは倒れた…', down: ' が倒れた', by: '（', byEnd: '）',
-        bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア' },
+        bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア',
+        piStep1: 'Piに接続しています…', piStep2: 'Piでサインインしています…', piStep3: '確認しています…',
+        piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。' },
   en: { title: 'Snake Park', desc: 'Eat the glowing orbs to grow longer. If your head touches another snake\'s body, you lose. Make others crash into you and eat the orbs they drop. Hold to boost (faster, but you slowly shrink).',
         ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: steer with your finger, use the button to boost',
         len: 'Length', rank: 'Rank', board: 'Ranking', boost: 'BOOST', over: 'Game Over', again: 'Play again',
         finalLen: 'Final length: ', you: 'You', youDown: 'You went down…', down: ' went down', by: ' (by ', byEnd: ')',
-        bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores' }
+        bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores',
+        piStep1: 'Connecting to Pi…', piStep2: 'Signing in with Pi…', piStep3: 'Verifying…',
+        piNg: 'Could not sign in. Open this app from its link in the Pi Browser.' }
 };
 if (!STR[LANG]) { LANG = 'ja'; try { localStorage.setItem('snakeLang', LANG); } catch (e) {} } // heal a bad stored language value
 function T(k) { const d = STR[LANG] || STR.ja; const v = d[k]; return v !== undefined ? v : k; }
@@ -630,8 +647,48 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
   applyLang();
 }));
 applyLang();
-startSync();
-document.getElementById('verTag').textContent = 'Snake Park v18';
+piBoot();
+document.getElementById('verTag').textContent = 'Snake Park Pi v1';
+
+// ---------------- Pi Network sign-in (Pi Browser build) ----------------
+// App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
+// accessToken exactly ONCE with App Studio. Only the exchange response's
+// uid/username are trusted as identity (never the authenticate result).
+// sessionToken is kept in memory only. This build is Pi-Browser-only: the
+// gate lifts on success; on failure/timeout it stays up with guidance.
+let piUser = null, piSessionToken = null;
+function piSetStatus(t) { const el = document.getElementById('piStatus'); if (el) el.textContent = t; }
+function onIncompletePaymentFound(payment) { if (window.console) console.log('[pi] incomplete payment (ignored - this app takes no payments)', payment && payment.identifier); }
+async function piBoot() {
+  const gate = document.getElementById('pi-gate');
+  let done = false;
+  const fail = () => { if (done) return; done = true; piSetStatus(T('piNg')); startSync(); };
+  const watchdog = setTimeout(fail, 60000); // authenticate/exchange may never answer (e.g. opened outside Pi Browser)
+  try {
+    if (!window.Pi || typeof Pi.init !== 'function' || typeof Pi.authenticate !== 'function') { clearTimeout(watchdog); fail(); return; }
+    piSetStatus(T('piStep1'));
+    await Pi.init({ version: '2.0' });
+    piSetStatus(T('piStep2'));
+    const auth = await Pi.authenticate(['username'], onIncompletePaymentFound);
+    piSetStatus(T('piStep3'));
+    const res = await fetch('https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com/pi/auth/v1/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken: auth.accessToken })
+    });
+    if (!res.ok) throw new Error('exchange ' + res.status);
+    const data = await res.json();
+    if (!data || !data.user || !data.user.uid) throw new Error('bad exchange response');
+    done = true; clearTimeout(watchdog);
+    piSessionToken = data.sessionToken || null; // memory only, never stored
+    piUser = { uid: data.user.uid, username: data.user.username }; // identity ONLY from App Studio
+    myId = 'pi:' + piUser.uid;
+    try { localStorage.setItem('snakePlayerId', myId); localStorage.setItem('snakeName', piUser.username); } catch (e) {}
+    const ni = document.getElementById('nameIn');
+    if (ni && piUser.username) { ni.value = piUser.username; ni.readOnly = true; }
+    if (gate) gate.classList.add('hidden');
+    startSync();
+  } catch (e) { clearTimeout(watchdog); fail(); }
+}
 
 // ---------------- diagnostics + game-over watchdog ----------------
 function showErr(msg) {
