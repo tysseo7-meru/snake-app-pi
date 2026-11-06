@@ -525,7 +525,7 @@ function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = '#17554e'; ctx.fillRect(0, 0, W, H); // deep lake outside the arena
   if (!player) return;
-  const zoom = Math.max(0.5, Math.min(1.05, 52 / (radiusOf(player) * 2 + 30)));
+  const zoom = Math.max(0.62, Math.min(1.05, 64 / (radiusOf(player) * 2 + 36))); // gentler pull-back: big snakes keep more on-screen speed
   const camX = player.x, camY = player.y;
   const acx = (0 - camX) * zoom + W / 2, acy = (0 - camY) * zoom + H / 2, ar = ARENA_R * zoom;
   // lake surface
@@ -901,7 +901,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v11';
+document.getElementById('verTag').textContent = 'Snake Park Pi v12';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
