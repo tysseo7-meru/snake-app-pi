@@ -7,7 +7,7 @@
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; overflow: hidden; background: #0c1020; }
+  html, body { height: 100%; overflow: hidden; background: #0b3236; }
   body { font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; color: #eef; }
   #game { position: fixed; inset: 0; display: block; touch-action: none; }
   .hud { position: fixed; z-index: 5; pointer-events: none; }
@@ -30,7 +30,7 @@
               font-size: 15px; font-weight: 700; display: none; user-select: none; -webkit-user-select: none; }
   #boostBtn.on { background: rgba(255,180,60,.55); color: #20160a; }
   .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; gap: 14px; background: rgba(6,8,18,.78); text-align: center; padding: 20px; }
+            justify-content: center; gap: 14px; background: rgba(4,26,28,.80); text-align: center; padding: 20px; }
   .screen h1 { font-size: 34px; letter-spacing: .04em; color: #aee2ff; text-shadow: 0 0 18px rgba(90,160,255,.65); }
   .screen p { color: #b9c6ee; font-size: 14px; line-height: 1.7; max-width: 430px; }
   .screen input { pointer-events: auto; font-size: 17px; padding: 10px 14px; border-radius: 10px; border: 1px solid #54679f;
@@ -116,6 +116,118 @@ function resize() {
 window.addEventListener('resize', resize); resize();
 
 const COLORS = ['#ff5d5d','#ffb84d','#f7e94d','#7dff5e','#4dffc3','#4dc9ff','#7d7dff','#c44dff','#ff4da6','#4dff88','#ffd24d','#6af2ff'];
+// ---------- snake skins: pre-rendered glossy bead segments with scale arcs ----------
+function shadeCol(hex, f) { // f>1 lightens toward white, f<1 darkens
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (f >= 1) { r += (255 - r) * (f - 1); g += (255 - g) * (f - 1); b += (255 - b) * (f - 1); }
+  else { r *= f; g *= f; b *= f; }
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+const skinCache = new Map();
+// Pattern library, modelled on real snake markings and classic snake-game
+// skins. Each body colour maps to one designed pattern, so every client
+// renders the same snake from its colour alone (no sync needed).
+const SKIN_OF = {
+  '#ff5d5d': { pat: 'tiger',  accent: '#4d0a14' },
+  '#ffb84d': { pat: 'bead' },
+  '#f7e94d': { pat: 'bands',  accent: '#3a2c14' },
+  '#7dff5e': { pat: 'scales', accent: '#2e8b2e' },
+  '#4dffc3': { pat: 'spots',  accent: '#0d7a5f' },
+  '#4dc9ff': { pat: 'stripe', accent: '#eaf7ff' },
+  '#7d7dff': { pat: 'camo',   accent: '#3d3db0' },
+  '#c44dff': { pat: 'spots',  accent: '#f2e6ff' },
+  '#ff4da6': { pat: 'rainbow' },
+  '#4dff88': { pat: 'bands',  accent: '#eaffea' },
+  '#ffd24d': { pat: 'scales', accent: '#a86e12' },
+  '#6af2ff': { pat: 'tiger',  accent: '#0b4d66' }
+};
+const RAINBOW = ['#ff5d5d', '#ffb84d', '#f7e94d', '#7dff5e', '#4dc9ff', '#c44dff'];
+function beadCanvas(color, dark, decorate) {
+  const c = document.createElement('canvas'); c.width = c.height = 96;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(36, 30, 6, 48, 48, 50);
+  grad.addColorStop(0, shadeCol(color, 1.55 * dark));
+  grad.addColorStop(0.45, shadeCol(color, 1.12 * dark));
+  grad.addColorStop(0.8, shadeCol(color, 0.92 * dark));
+  grad.addColorStop(1, shadeCol(color, 0.62 * dark));
+  g.fillStyle = grad;
+  g.beginPath(); g.arc(48, 48, 47, 0, 6.29); g.fill();
+  g.save();
+  g.beginPath(); g.arc(48, 48, 47, 0, 6.29); g.clip();
+  if (decorate) decorate(g);
+  g.strokeStyle = 'rgba(0,0,0,0.13)'; g.lineWidth = 2.2;
+  for (const yy of [30, 50, 70]) { g.beginPath(); g.arc(48, yy - 16, 42, 0.35, Math.PI - 0.35); g.stroke(); }
+  g.restore();
+  const hi = g.createRadialGradient(33, 27, 1, 33, 27, 17);
+  hi.addColorStop(0, 'rgba(255,255,255,0.5)'); hi.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = hi; g.beginPath(); g.arc(33, 27, 17, 0, 6.29); g.fill();
+  g.beginPath(); g.arc(48, 48, 46, 0, 6.29); g.strokeStyle = 'rgba(0,0,0,0.26)'; g.lineWidth = 2.5; g.stroke();
+  return c;
+}
+function skinSprites(color) {
+  let s = skinCache.get(color);
+  if (s) return s;
+  const spec = SKIN_OF[color] || { pat: 'bead' };
+  const A = spec.accent || '#222222';
+  let list, dir = false;
+  switch (spec.pat) {
+    case 'bands':
+      list = [beadCanvas(color, 1), beadCanvas(A, 1)];
+      break;
+    case 'spots': {
+      const blob = (pts) => (g) => { g.fillStyle = A; g.globalAlpha = 0.75;
+        for (const [x, y, r] of pts) { g.beginPath(); g.arc(x, y, r, 0, 6.29); g.fill(); } g.globalAlpha = 1; };
+      list = [beadCanvas(color, 1, blob([[30, 34, 7], [62, 58, 9], [44, 76, 5]])),
+              beadCanvas(color, 0.94, blob([[58, 28, 6], [30, 62, 8], [70, 74, 5]])),
+              beadCanvas(color, 1, blob([[40, 48, 10], [68, 36, 5], [24, 74, 6]]))];
+      break; }
+    case 'camo': {
+      const blotch = (pts) => (g) => { g.fillStyle = A; g.globalAlpha = 0.55;
+        for (const [x, y, rx, ry, rot] of pts) { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, 6.29); g.fill(); } g.globalAlpha = 1; };
+      list = [beadCanvas(color, 1, blotch([[30, 36, 14, 9, 0.5], [64, 62, 16, 10, -0.4], [52, 22, 10, 6, 0.2]])),
+              beadCanvas(color, 0.95, blotch([[58, 34, 13, 8, -0.6], [28, 66, 15, 9, 0.3], [74, 76, 9, 6, 0]])),
+              beadCanvas(color, 1, blotch([[36, 58, 16, 10, 0.9], [66, 26, 11, 7, 0.1], [20, 24, 8, 5, -0.3]]))];
+      break; }
+    case 'scales': {
+      dir = true;
+      const plates = (off) => (g) => { g.strokeStyle = A; g.globalAlpha = 0.5; g.lineWidth = 3.4;
+        for (const yy of [26 + off, 48 + off, 70 + off]) { g.beginPath(); g.arc(48, yy - 18, 44, 0.3, Math.PI - 0.3); g.stroke(); } g.globalAlpha = 1; };
+      list = [beadCanvas(color, 1, plates(0)), beadCanvas(color, 0.93, plates(6))];
+      break; }
+    case 'stripe': {
+      dir = true;
+      const stripe = (g) => { g.fillStyle = A; g.globalAlpha = 0.85; g.fillRect(-2, 39, 100, 18); g.globalAlpha = 1; };
+      list = [beadCanvas(color, 1, stripe), beadCanvas(color, 0.93, stripe)];
+      break; }
+    case 'tiger': {
+      dir = true;
+      const tbands = (g) => { g.fillStyle = A; g.globalAlpha = 0.5;
+        for (const xx of [22, 46, 70]) g.fillRect(xx, -2, 8, 100); g.globalAlpha = 1; };
+      list = [beadCanvas(color, 1, tbands), beadCanvas(color, 0.93, tbands)];
+      break; }
+    case 'rainbow':
+      list = RAINBOW.map(c => beadCanvas(c, 1));
+      break;
+    default:
+      list = [beadCanvas(color, 1), beadCanvas(color, 0.88)];
+  }
+  s = { list, dir };
+  skinCache.set(color, s);
+  return s;
+}
+// faint hexagon tile for the lake surface (seamless: 192x168 = 4x48 x 4x42 grid)
+let _hexTile = null;
+function hexTile() {
+  if (_hexTile) return _hexTile;
+  const c = document.createElement('canvas'); c.width = 192; c.height = 168;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(255,255,255,0.055)'; g.lineWidth = 1.4;
+  const hex = (cx, cy) => { g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k + Math.PI / 6; const x = cx + 27.7 * Math.cos(a), y = cy + 28 * Math.sin(a); k ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); g.stroke(); };
+  for (let row = -1; row < 6; row++) for (let col = -1; col < 6; col++) hex(col * 48 + (Math.abs(row) % 2 ? 24 : 0), row * 42);
+  _hexTile = c;
+  return c;
+}
 const BOT_NAMES = ['Pochi','Hana','Sora','Mugi','Coco','Rin','Taro','Yuki','Mame','Fuku','Saku'];
 let LANG = 'ja';
 try { LANG = localStorage.getItem('snakeLang') || 'ja'; } catch (e) {}
@@ -311,21 +423,47 @@ function feed(msg) {
 // ---------------- rendering ----------------
 function drawSnake(s, camX, camY, zoom) {
   const r = radiusOf(s);
-  // body: discs stamped along the trail, tail first (robust rendering on any client)
+  const skin = skinSprites(s.color);
+  const sp = skin.list;
+  const alpha = s.alive ? 0.97 : 0.25;
+  // body: patterned bead segments stamped along the trail, tail first.
+  // Directional patterns (stripe / tiger / scales) rotate with the body.
   const n = s.pts.length;
-  for (let i = n - 1; i >= 0; i -= 2) {
+  let seg = 0, lastAng = s.ang || 0;
+  for (let i = n - 1; i >= 0; i -= 2, seg++) {
     const p = s.pts[i];
     const x = (p.x - camX) * zoom + W / 2, y = (p.y - camY) * zoom + H / 2;
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
     const tailT = Math.min(1, (n - i) / (n * 0.25 + 1));
-    ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, r * zoom * (0.35 + 0.65 * tailT)), 0, 6.29);
-    ctx.fillStyle = s.color; ctx.globalAlpha = s.alive ? 0.95 : 0.25; ctx.fill();
+    const rr = Math.max(1.2, r * zoom * (0.35 + 0.65 * tailT)) * 1.14;
+    const spr = sp[seg % sp.length];
+    ctx.globalAlpha = alpha;
+    if (skin.dir) {
+      const q = s.pts[Math.max(0, i - 2)];
+      const dx = q.x - p.x, dy = q.y - p.y;
+      if (dx * dx + dy * dy > 0.01) lastAng = Math.atan2(dy, dx);
+      const ca = Math.cos(lastAng), sa = Math.sin(lastAng);
+      ctx.setTransform(DPR * ca, DPR * sa, -DPR * sa, DPR * ca, DPR * x, DPR * y);
+      ctx.drawImage(spr, -rr, -rr, rr * 2, rr * 2);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    } else {
+      ctx.drawImage(spr, x - rr, y - rr, rr * 2, rr * 2);
+    }
   }
   ctx.globalAlpha = 1;
-  // head disc (guarantees the face sits on the body)
+  // head (same skin, full size — guarantees the face sits on the body)
   const hx = (s.x - camX) * zoom + W / 2, hy = (s.y - camY) * zoom + H / 2;
-  ctx.beginPath(); ctx.arc(hx, hy, r * zoom, 0, 6.29);
-  ctx.fillStyle = s.color; ctx.globalAlpha = s.alive ? 0.95 : 0.25; ctx.fill(); ctx.globalAlpha = 1;
+  const hr = r * zoom * 1.14;
+  ctx.globalAlpha = alpha;
+  if (skin.dir) {
+    const ca = Math.cos(s.ang), sa = Math.sin(s.ang);
+    ctx.setTransform(DPR * ca, DPR * sa, -DPR * sa, DPR * ca, DPR * hx, DPR * hy);
+    ctx.drawImage(sp[0], -hr, -hr, hr * 2, hr * 2);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  } else {
+    ctx.drawImage(sp[0], hx - hr, hy - hr, hr * 2, hr * 2);
+  }
+  ctx.globalAlpha = 1;
   // eyes
   const ex = Math.cos(s.ang), ey = Math.sin(s.ang), px = -ey, py = ex;
   for (const sgn of [-1, 1]) {
@@ -333,30 +471,37 @@ function drawSnake(s, camX, camY, zoom) {
     ctx.beginPath(); ctx.arc(cx, cy, Math.max(1.6, r * 0.30 * zoom), 0, 6.29); ctx.fillStyle = '#fff'; ctx.fill();
     ctx.beginPath(); ctx.arc(cx + ex * r * 0.12 * zoom, cy + ey * r * 0.12 * zoom, Math.max(0.9, r * 0.15 * zoom), 0, 6.29); ctx.fillStyle = '#10131f'; ctx.fill();
   }
-  // name
+  // name (soft dark shadow keeps it readable on the light lake surface)
   ctx.font = `600 ${Math.max(10, 12 * zoom)}px sans-serif`; ctx.textAlign = 'center';
-  ctx.fillStyle = s.isPlayer ? '#ffd76a' : 'rgba(230,238,255,0.85)';
+  ctx.save();
+  ctx.shadowColor = 'rgba(3,43,40,0.65)'; ctx.shadowBlur = 4;
+  ctx.fillStyle = s.isPlayer ? '#ffd76a' : 'rgba(255,255,255,0.94)';
   ctx.fillText(s.name, hx, hy - r * zoom - 8);
+  ctx.restore();
 }
 function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.fillStyle = '#0c1020'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#17554e'; ctx.fillRect(0, 0, W, H); // deep lake outside the arena
   if (!player) return;
   const zoom = Math.max(0.5, Math.min(1.05, 52 / (radiusOf(player) * 2 + 30)));
   const camX = player.x, camY = player.y;
-  // grid
-  ctx.strokeStyle = 'rgba(110,130,220,0.10)'; ctx.lineWidth = 1;
-  const gs = 120 * zoom;
-  const ox = (W / 2 - camX * zoom) % gs, oy = (H / 2 - camY * zoom) % gs;
-  ctx.beginPath();
-  for (let x = ox; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
-  for (let y = oy; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
-  ctx.stroke();
-  // arena border
-  ctx.beginPath(); ctx.arc((0 - camX) * zoom + W / 2, (0 - camY) * zoom + H / 2, ARENA_R * zoom, 0, 6.29);
-  ctx.strokeStyle = 'rgba(255,80,90,0.85)'; ctx.lineWidth = 5; ctx.stroke();
-  ctx.beginPath(); ctx.arc((0 - camX) * zoom + W / 2, (0 - camY) * zoom + H / 2, ARENA_R * zoom, 0, 6.29);
-  ctx.strokeStyle = 'rgba(255,80,90,0.14)'; ctx.lineWidth = 26; ctx.stroke();
+  const acx = (0 - camX) * zoom + W / 2, acy = (0 - camY) * zoom + H / 2, ar = ARENA_R * zoom;
+  // lake surface
+  const lg = ctx.createRadialGradient(acx, acy, ar * 0.08, acx, acy, ar);
+  lg.addColorStop(0, '#abdfd3'); lg.addColorStop(0.55, '#8cd0c0'); lg.addColorStop(1, '#6db7a7');
+  ctx.beginPath(); ctx.arc(acx, acy, ar, 0, 6.29); ctx.fillStyle = lg; ctx.fill();
+  // faint hexagon pattern fixed to the world, clipped to the arena
+  ctx.save();
+  ctx.beginPath(); ctx.arc(acx, acy, ar, 0, 6.29); ctx.clip();
+  const tile = hexTile(), tw = tile.width, th = tile.height;
+  const offx = ((acx % tw) + tw) % tw, offy = ((acy % th) + th) % th;
+  for (let x = offx - tw; x < W; x += tw) for (let y = offy - th; y < H; y += th) ctx.drawImage(tile, x, y);
+  ctx.restore();
+  // arena border (soft shoreline)
+  ctx.beginPath(); ctx.arc(acx, acy, ar, 0, 6.29);
+  ctx.strokeStyle = 'rgba(240,255,250,0.85)'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.beginPath(); ctx.arc(acx, acy, ar, 0, 6.29);
+  ctx.strokeStyle = 'rgba(190,240,225,0.16)'; ctx.lineWidth = 24; ctx.stroke();
   // orbs
   const t = performance.now() / 380;
   for (const o of orbs) {
@@ -703,7 +848,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v7';
+document.getElementById('verTag').textContent = 'Snake Park Pi v9';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
