@@ -588,23 +588,29 @@ function checkRemoteDeaths() {
 
 // ---------------- high scores (this device, every run, top 10 overall) ----------------
 let lastEntry = null;
+// One row per person: keep only each name's best score (earliest date wins a tie).
+function collapseScores(list) {
+  const best = new Map();
+  for (const e of list) {
+    const cur = best.get(e.name);
+    if (!cur || e.score > cur.score || (e.score === cur.score && e.date < cur.date)) best.set(e.name, e);
+  }
+  return [...best.values()].sort((a, b) => b.score - a.score || a.date - b.date);
+}
 function loadHighScores() {
   try {
     const list = JSON.parse(localStorage.getItem('snakeHighScores') || '[]');
     if (!Array.isArray(list)) return [];
-    return list.filter(e => e && typeof e.name === 'string' && typeof e.score === 'number')
+    const clean = list.filter(e => e && typeof e.name === 'string' && typeof e.score === 'number')
                .map(e => ({ name: e.name, score: e.score, date: typeof e.date === 'number' ? e.date : 0 }));
+    return collapseScores(clean);
   } catch (e) { return []; }
 }
 function recordHighScore() {
   const sc = Math.floor(player.score);
   if (sc > 0) {
-    let list = loadHighScores();
-    const myBest = list.reduce((m, e) => e.name === player.name ? Math.max(m, e.score) : m, 0);
-    if (sc > myBest) list = list.filter(e => e.name !== player.name); // new personal record: clear my past scores
     lastEntry = { name: player.name, score: sc, date: Date.now() };
-    list.push(lastEntry);
-    list.sort((a, b) => b.score - a.score || a.date - b.date);
+    const list = collapseScores(loadHighScores().concat([lastEntry])); // one row per person: best only
     try { localStorage.setItem('snakeHighScores', JSON.stringify(list.slice(0, 30))); } catch (e) {}
   }
   renderHighScores();
@@ -620,11 +626,11 @@ function renderHighScores() {
 }
 
 // ---------------- shared high scores (Firestore: snakeScores) ----------------
-// Every finished run is submitted to the shared collection; the game-over
-// table then shows everyone's top 10 together, highest score first (own
-// latest run highlighted). If the shared list cannot be loaded, the local
-// list simply stays.
-let fbScores = null, lastScoreId = null;
+// One document per player (doc id = player id) holding only their BEST
+// score; the game-over table shows everyone's top 10, highest first, with
+// the player's own row highlighted. If the shared list cannot be loaded,
+// the local list simply stays.
+let fbScores = null;
 function scoresCol() {
   if (fbScores) return fbScores;
   if (fbDb) { try { fbScores = fbDb.collection('snakeScores'); } catch (e) { fbScores = null; } }
@@ -633,11 +639,14 @@ function scoresCol() {
 function submitScore() {
   const sc = Math.floor(player.score);
   const col = scoresCol();
-  if (!col || sc <= 0) return;
+  if (!col || sc <= 0 || !myId) return;
   try {
-    col.add({ name: String(player.name || '???').slice(0, 24), score: sc, t: Date.now() })
-      .then(ref => { lastScoreId = ref.id; renderGlobalScores(); })
-      .catch(() => {});
+    const ref = col.doc(myId); // one doc per player: only a new best replaces it
+    ref.get().then(snap => {
+      const prev = snap.exists ? ((snap.data() || {}).score || 0) : 0;
+      if (sc > prev) ref.set({ name: String(player.name || '???').slice(0, 24), score: sc, t: Date.now() }).then(() => renderGlobalScores()).catch(() => {});
+      else renderGlobalScores();
+    }).catch(() => {});
   } catch (e) {}
 }
 function renderGlobalScores() {
@@ -649,7 +658,7 @@ function renderGlobalScores() {
     if (!rows.length) return;
     const el = document.getElementById('hsList'); if (!el) return;
     const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hsAll');
-    el.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="${r.id === lastScoreId ? 'me' : ''}">${i + 1}. ${esc(r.name)}　${Math.floor(r.score)}</div>`).join('');
+    el.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="${r.id === myId ? 'me' : ''}">${i + 1}. ${esc(r.name)}　${Math.floor(r.score)}</div>`).join('');
   }).catch(() => {});
 }
 
@@ -684,7 +693,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v3';
+document.getElementById('verTag').textContent = 'Snake Park Pi v4';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
