@@ -29,8 +29,9 @@
               border: 2px solid rgba(160,180,255,.5); background: rgba(40,60,140,.45); color: #dfe8ff;
               font-size: 15px; font-weight: 700; display: none; user-select: none; -webkit-user-select: none; }
   #boostBtn.on { background: rgba(255,180,60,.55); color: #20160a; }
+  #boostBtn { touch-action: none; }
   .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; gap: 14px; background: rgba(4,26,28,.80); text-align: center; padding: 20px; }
+            justify-content: center; gap: 14px; overflow-y: auto; background: rgba(4,26,28,.80); text-align: center; padding: 20px; }
   .screen h1 { font-size: 34px; letter-spacing: .04em; color: #aee2ff; text-shadow: 0 0 18px rgba(90,160,255,.65); }
   .screen p { color: #b9c6ee; font-size: 14px; line-height: 1.7; max-width: 430px; }
   .screen input { pointer-events: auto; font-size: 17px; padding: 10px 14px; border-radius: 10px; border: 1px solid #54679f;
@@ -51,6 +52,19 @@
             padding: 7px 16px; border-radius: 999px; border: 1px solid rgba(140,160,255,.4);
             background: rgba(10,14,30,.62); color: #dfe8ff; font-size: 13px; font-weight: 700; }
   .hidden { display: none !important; }
+  /* landscape phones: compact screens so everything stays reachable */
+  @media (max-height: 500px) {
+    .screen { justify-content: flex-start; gap: 7px; padding: 10px; }
+    .screen h1 { font-size: 23px; }
+    .screen p { font-size: 11.5px; line-height: 1.5; max-width: 86vw; }
+    .screen input { padding: 7px 12px; font-size: 15px; }
+    .screen button { padding: 8px 26px; font-size: 16px; }
+    #hsBox { max-height: 24vh; overflow-y: auto; font-size: 12px; padding: 6px 12px; }
+    #boostBtn { width: 66px; height: 66px; right: 12px; bottom: 12px; font-size: 12px; }
+    #board { font-size: 11.5px; padding: 5px 8px; min-width: 0; }
+    #status { font-size: 12px; padding: 5px 8px; }
+    #bgmBtn { top: 52px; padding: 5px 12px; font-size: 12px; }
+  }
   #pi-gate { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center;
              justify-content: center; gap: 16px; background: linear-gradient(180deg, #141b3d, #0c1020);
              text-align: center; padding: 24px; }
@@ -114,6 +128,8 @@ function resize() {
   cv.style.width = W + 'px'; cv.style.height = H + 'px';
 }
 window.addEventListener('resize', resize); resize();
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
 const COLORS = ['#ff5d5d','#ffb84d','#f7e94d','#7dff5e','#4dffc3','#4dc9ff','#7d7dff','#c44dff','#ff4da6','#4dff88','#ffd24d','#6af2ff'];
 // ---------- snake skins: pre-rendered glossy bead segments with scale arcs ----------
@@ -233,14 +249,14 @@ let LANG = 'ja';
 try { LANG = localStorage.getItem('snakeLang') || 'ja'; } catch (e) {}
 const STR = {
   ja: { title: 'スネークパーク', desc: '光る粒を食べて長くなろう。他の蛇の体に頭が当たると負け。逆に、自分の体に当てさせれば相手が粒になって食べられる。押している間はブースト（速くなる代わりに少しずつ短くなる）。',
-        ph: '名前（例：アキラ）', play: 'あそぶ', how: 'PC：マウスで向き、押している間ブースト／ スマホ：指で向き、下のボタンでブースト',
+        ph: '名前（例：アキラ）', play: 'あそぶ', how: 'PC：マウスで向き、押している間ブースト／ スマホ：触れた所からドラッグで向き（スティック操作）、右下ボタン長押しでブースト。横画面でも遊べます',
         len: '長さ', rank: '順位', board: 'ランキング', boost: 'ブースト', over: 'ゲームオーバー', again: 'もう一度',
         finalLen: '最終の長さ： ', you: 'あなた', youDown: 'あなたは倒れた…', down: ' が倒れた', by: '（', byEnd: '）',
         bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア', hsAll: 'みんなのハイスコア',
         piStep1: 'Piに接続しています…', piStep2: 'Piでサインインしています…', piStep3: '確認しています…',
         piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。' },
   en: { title: 'Snake Park', desc: 'Eat the glowing orbs to grow longer. If your head touches another snake\'s body, you lose. Make others crash into you and eat the orbs they drop. Hold to boost (faster, but you slowly shrink).',
-        ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: steer with your finger, use the button to boost',
+        ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: drag anywhere to steer (joystick), hold the button to boost. Landscape works too',
         len: 'Length', rank: 'Rank', board: 'Ranking', boost: 'BOOST', over: 'Game Over', again: 'Play again',
         finalLen: 'Final length: ', you: 'You', youDown: 'You went down…', down: ' went down', by: ' (by ', byEnd: ')',
         bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores', hsAll: "Everyone's High Scores",
@@ -302,14 +318,36 @@ function spawnWorld(playerName) {
 }
 
 // ---------------- input ----------------
-let pointer = null, pointerDown = false, pointerType = 'mouse';
-cv.addEventListener('pointermove', e => { pointer = { x: e.clientX, y: e.clientY }; pointerType = e.pointerType || 'mouse'; });
-cv.addEventListener('pointerdown', e => { pointer = { x: e.clientX, y: e.clientY }; pointerDown = true; pointerType = e.pointerType || 'mouse'; });
-window.addEventListener('pointerup', () => { pointerDown = false; });
+// Input: mouse steers by absolute position (PC). Touch uses a floating
+// virtual joystick: touch anywhere and drag — the snake heads in the drag
+// direction. Steering and boost are tracked per pointer id, so holding
+// BOOST with a second finger never disturbs steering (and vice versa).
+let mousePt = null, mouseDown = false;
+let joy = null; // {id, ox, oy, x, y} — origin floats along after a 70px drag
+cv.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') { mousePt = { x: e.clientX, y: e.clientY }; mouseDown = true; }
+  else if (!joy) joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
+});
+cv.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') { mousePt = { x: e.clientX, y: e.clientY }; return; }
+  if (joy && e.pointerId === joy.id) {
+    joy.x = e.clientX; joy.y = e.clientY;
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, len = Math.hypot(dx, dy);
+    if (len > 70) { joy.ox = joy.x - dx / len * 70; joy.oy = joy.y - dy / len * 70; }
+  }
+});
+function endPointer(e) {
+  if (e.pointerType === 'mouse') mouseDown = false;
+  else if (joy && e.pointerId === joy.id) joy = null;
+}
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
 const boostBtn = document.getElementById('boostBtn');
-let touchBoost = false;
-boostBtn.addEventListener('pointerdown', e => { e.preventDefault(); touchBoost = true; boostBtn.classList.add('on'); });
-window.addEventListener('pointerup', () => { touchBoost = false; boostBtn.classList.remove('on'); });
+let touchBoost = false, boostId = null;
+boostBtn.addEventListener('pointerdown', e => { e.preventDefault(); boostId = e.pointerId; touchBoost = true; boostBtn.classList.add('on'); });
+function endBoost(e) { if (e.pointerId === boostId) { boostId = null; touchBoost = false; boostBtn.classList.remove('on'); } }
+boostBtn.addEventListener('pointerup', endBoost);
+boostBtn.addEventListener('pointercancel', endBoost);
 if ('ontouchstart' in window) boostBtn.style.display = 'block';
 
 // ---------------- AI ----------------
@@ -514,6 +552,14 @@ function draw() {
   ctx.globalAlpha = 1;
   const sorted = [...snakes, ...remoteRenderList()].sort((a, b) => radiusOf(a) - radiusOf(b));
   for (const s of sorted) drawSnake(s, camX, camY, zoom);
+  // virtual joystick indicator (touch steering)
+  if (joy) {
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, len = Math.hypot(dx, dy) || 1, cl = Math.min(len, 52);
+    const kx = joy.ox + dx / len * cl, ky = joy.oy + dy / len * cl;
+    ctx.beginPath(); ctx.arc(joy.ox, joy.oy, 52, 0, 6.29); ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(kx, ky, 24, 0, 6.29); ctx.fillStyle = 'rgba(255,255,255,0.38)'; ctx.fill();
+  }
 }
 
 // ---------------- HUD ----------------
@@ -541,11 +587,14 @@ function loop(now) {
   const dt = Math.min(2.2, last ? (now - last) / 16.7 : 1); last = now;
   if (running && player) {
     try {
-      if (pointer) {
-        const pdx = pointer.x - W / 2, pdy = pointer.y - H / 2;
+      if (joy) {
+        const jdx = joy.x - joy.ox, jdy = joy.y - joy.oy;
+        if (jdx * jdx + jdy * jdy > 14 * 14) player.targetAng = Math.atan2(jdy, jdx); // small dead zone: keep heading
+      } else if (mousePt) {
+        const pdx = mousePt.x - W / 2, pdy = mousePt.y - H / 2;
         if (pdx * pdx + pdy * pdy > 30 * 30) player.targetAng = Math.atan2(pdy, pdx); // dead zone near center: keep heading
       }
-      player.boost = touchBoost || (pointerDown && pointerType === 'mouse'); // touch steering is NOT boost
+      player.boost = touchBoost || mouseDown; // touch steering alone is NOT boost
       for (const s of snakes) {
         if (!s.alive) continue;
         if (!s.isPlayer) aiThink(s);
@@ -848,7 +897,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v9';
+document.getElementById('verTag').textContent = 'Snake Park Pi v10';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
