@@ -70,6 +70,7 @@
              text-align: center; padding: 24px; }
   #pi-gate img { width: 104px; height: 104px; border-radius: 24px; }
   #pi-gate h1 { font-size: 30px; font-weight: 800; color: #dfe8ff; }
+  #piHint { color: #ffd76a; font-size: 14px; line-height: 1.7; max-width: 84vw; text-align: center; }
   #piStatus { font-size: 15px; color: #ffd76a; line-height: 1.7; max-width: 30em; }
 </style>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
@@ -89,6 +90,7 @@
   <img src="app-icon-1024.png" alt="">
   <h1>スネークパーク</h1>
   <p id="piStatus">Piに接続しています…</p>
+  <p id="piHint" class="hidden"></p>
 </div>
 
 <div id="startScr" class="screen">
@@ -254,14 +256,16 @@ const STR = {
         finalLen: '最終の長さ： ', you: 'あなた', youDown: 'あなたは倒れた…', down: ' が倒れた', by: '（', byEnd: '）',
         bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア', hsAll: 'みんなのハイスコア',
         piStep1: 'Piに接続しています…', piStep2: 'Piでサインインしています…', piStep3: '確認しています…',
-        piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。' },
+        piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。',
+        piHint: 'このブラウザではサインインできません。Piブラウザで開いてください。' },
   en: { title: 'Snake Park', desc: 'Eat the glowing orbs to grow longer. If your head touches another snake\'s body, you lose. Make others crash into you and eat the orbs they drop. Hold to boost (faster, but you slowly shrink).',
         ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: drag anywhere to steer (joystick), hold the button to boost. Landscape works too',
         len: 'Length', rank: 'Rank', board: 'Ranking', boost: 'BOOST', over: 'Game Over', again: 'Play again',
         finalLen: 'Final length: ', you: 'You', youDown: 'You went down…', down: ' went down', by: ' (by ', byEnd: ')',
         bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores', hsAll: "Everyone's High Scores",
         piStep1: 'Connecting to Pi…', piStep2: 'Signing in with Pi…', piStep3: 'Verifying…',
-        piNg: 'Could not sign in. Open this app from its link in the Pi Browser.' }
+        piNg: 'Could not sign in. Open this app from its link in the Pi Browser.',
+        piHint: 'Sign-in is not available in this browser. Please open this app in the Pi Browser.' }
 };
 if (!STR[LANG]) { LANG = 'ja'; try { localStorage.setItem('snakeLang', LANG); } catch (e) {} } // heal a bad stored language value
 function T(k) { const d = STR[LANG] || STR.ja; const v = d[k]; return v !== undefined ? v : k; }
@@ -897,7 +901,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v10';
+document.getElementById('verTag').textContent = 'Snake Park Pi v11';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -910,6 +914,13 @@ function piSetStatus(t) { const el = document.getElementById('piStatus'); if (el
 function onIncompletePaymentFound(payment) { if (window.console) console.log('[pi] incomplete payment (ignored - this app takes no payments)', payment && payment.identifier); }
 async function piBoot() {
   const gate = document.getElementById('pi-gate');
+  // Opened outside Pi Browser (e.g. Safari): sign-in can never complete
+  // there, so show the guidance immediately instead of after the 60 s
+  // watchdog. The normal flow continues untouched; the hint never blocks.
+  if (!/PiBrowser/i.test(navigator.userAgent || '')) {
+    const hint = document.getElementById('piHint');
+    if (hint) { hint.innerHTML = esc(T('piHint')) + '<br><a href="https://snakeparkmocovs3958.pinet.com" style="color:#7ab8ff">snakeparkmocovs3958.pinet.com</a>'; hint.classList.remove('hidden'); }
+  }
   let done = false;
   const fail = () => { if (done) return; done = true; const el = document.getElementById('piStatus'); if (el) el.innerHTML = esc(T('piNg')) + '<br><a href="https://snakeparkmocovs3958.pinet.com" style="color:#7ab8ff">snakeparkmocovs3958.pinet.com</a>'; startSync(); };
   const watchdog = setTimeout(fail, 60000); // authenticate/exchange may never answer (e.g. opened outside Pi Browser)
