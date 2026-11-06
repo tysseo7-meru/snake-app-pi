@@ -472,7 +472,7 @@ function toggleBgm() {
   if (bgmOn) bgmStart(); else bgmStop();
 }
 
-// ---------------- online co-play (Firestore, project moco-othello-6e5c4) ----------------
+// ---------------- online co-play (Realtime Database for presence; Firestore only for scores) ----------------
 // Other players who are in the game appear in the same arena; AI fills the rest.
 // Orbs and AI snakes stay local to each client; only player snakes are shared.
 // If Firebase cannot be reached, the game simply runs solo.
@@ -480,47 +480,52 @@ const FB_CONFIG = {
   apiKey: "AIzaSyBsIRq3XTsDkIFj4sxzmGS9DgT53b2VMUs",
   authDomain: "moco-othello-6e5c4.firebaseapp.com",
   projectId: "moco-othello-6e5c4",
+  databaseURL: "https://moco-othello-6e5c4-default-rtdb.asia-southeast1.firebasedatabase.app",
   storageBucket: "moco-othello-6e5c4.firebasestorage.app",
   messagingSenderId: "276791873988",
   appId: "1:276791873988:web:38b42f081c22e6361c5491"
 };
 let myId = null;
 try { myId = localStorage.getItem('snakePlayerId'); if (!myId) { myId = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); localStorage.setItem('snakePlayerId', myId); } } catch (e) { myId = 'p' + Date.now().toString(36); }
-let fbDb = null, fbCol = null, onlineReady = false;
+let fbDb = null, rtDb = null, presenceRef = null, myRef = null, onlineReady = false;
 const remotes = new Map(); // id -> {name,color,score,alive,x,y,ang,pts,dispX,dispY,seenAt,droppedOrbs}
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 function startSync() {
   loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')
     .then(() => loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'))
+    .then(() => loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js'))
     .then(() => {
       firebase.initializeApp(FB_CONFIG);
-      fbDb = firebase.firestore();
-      fbCol = fbDb.collection('snakePlayers');
+      fbDb = firebase.firestore(); // scores only (snakeScores); presence moved to RTDB (bandwidth-metered, not write-count-metered)
+      rtDb = firebase.database();
+      presenceRef = rtDb.ref('snakePlayers');
+      myRef = presenceRef.child(myId);
       onlineReady = true;
-      fbCol.onSnapshot(snap => {
+      const onRemote = snap => {
+        const id = snap.key;
+        if (!id || id === myId) return;
+        const d = snap.val();
         const now = Date.now();
-        snap.forEach(doc => {
-          if (doc.id === myId) return;
-          const d = doc.data();
-          if (!d || now - (d.t || 0) > 6000) return; // stale = gone
-          let r = remotes.get(doc.id);
-          if (!r) { r = { dispX: d.x, dispY: d.y, droppedOrbs: false }; remotes.set(doc.id, r); }
-          const wasAlive = r.alive;
-          Object.assign(r, { name: d.name, color: d.color, score: d.score || 0, alive: !!d.alive,
-                             x: d.x, y: d.y, ang: d.ang || 0, seenAt: now,
-                             pts: decodePts(d.pts) });
-          if (wasAlive && !r.alive && !r.droppedOrbs) { // they died on their screen: drop their orbs here too
-            r.droppedOrbs = true;
-            for (let i = 0; i < r.pts.length; i += 2) orbs.push(makeOrb(r.pts[i].x + rand(-6, 6), r.pts[i].y + rand(-6, 6), 2, true));
-            feed(r.name + T('down'));
-          }
-          if (r.alive) r.droppedOrbs = false;
-        });
-        // prune remotes that went stale
-        for (const [id, r] of remotes) if (now - r.seenAt > 6000) remotes.delete(id);
+        if (!d || now - (d.t || 0) > 6000) return; // stale = gone
+        let r = remotes.get(id);
+        if (!r) { r = { dispX: d.x, dispY: d.y, droppedOrbs: false }; remotes.set(id, r); }
+        const wasAlive = r.alive;
+        Object.assign(r, { name: d.name, color: d.color, score: d.score || 0, alive: !!d.alive,
+                           x: d.x, y: d.y, ang: d.ang || 0, seenAt: now,
+                           pts: decodePts(d.pts) });
+        if (wasAlive && !r.alive && !r.droppedOrbs) { // they died on their screen: drop their orbs here too
+          r.droppedOrbs = true;
+          for (let i = 0; i < r.pts.length; i += 2) orbs.push(makeOrb(r.pts[i].x + rand(-6, 6), r.pts[i].y + rand(-6, 6), 2, true));
+          feed(r.name + T('down'));
+        }
+        if (r.alive) r.droppedOrbs = false;
         topUpBots();
-      }, () => { /* snapshot error: stay solo */ });
-      setInterval(publishNow, 600); // 600 ms: the Firestore free quota is 20k writes/day — 120 ms publishing burned it in under an hour of total play
+      };
+      presenceRef.on('child_added', onRemote);
+      presenceRef.on('child_changed', onRemote);
+      presenceRef.on('child_removed', snap => { remotes.delete(snap.key); topUpBots(); });
+      try { myRef.onDisconnect().remove(); } catch (e) {} // server removes my node if the connection drops
+      setInterval(publishNow, 200);
       setInterval(() => { const now = Date.now(); for (const [id, r] of remotes) if (now - r.seenAt > 6000) remotes.delete(id); }, 2500);
     })
     .catch(() => { /* offline: solo mode */ });
@@ -532,13 +537,15 @@ function encodePts(pts) {
 }
 function decodePts(arr) {
   const out = [];
-  if (Array.isArray(arr)) for (let i = 0; i + 1 < arr.length; i += 2) out.push({ x: arr[i], y: arr[i + 1] });
+  if (!arr) return out;
+  const a = Array.isArray(arr) ? arr : Object.keys(arr).sort((x, y) => x - y).map(k => arr[k]); // RTDB may return numeric-keyed objects
+  for (let i = 0; i + 1 < a.length; i += 2) out.push({ x: a[i], y: a[i + 1] });
   return out;
 }
 function publishNow() {
-  if (!onlineReady || !fbCol || !player || !running) return;
+  if (!onlineReady || !myRef || !player || !running) return;
   try {
-    fbCol.doc(myId).set({
+    myRef.set({
       name: player.name, color: player.color,
       x: Math.round(player.x), y: Math.round(player.y), ang: Math.round(player.ang * 100) / 100,
       score: Math.floor(player.score), alive: player.alive,
@@ -547,7 +554,7 @@ function publishNow() {
   } catch (e) {}
 }
 function leaveOnline() {
-  if (fbCol && myId) { try { fbCol.doc(myId).delete().catch(() => {}); } catch (e) {} }
+  if (myRef) { try { myRef.remove().catch(() => {}); } catch (e) {} }
 }
 window.addEventListener('pagehide', leaveOnline);
 function activeRemotes() { return [...remotes.values()].filter(r => r.alive); }
@@ -696,7 +703,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v6';
+document.getElementById('verTag').textContent = 'Snake Park Pi v7';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
