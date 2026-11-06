@@ -33,6 +33,7 @@
   .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
             justify-content: center; gap: 14px; overflow-y: auto; background: rgba(4,26,28,.80); text-align: center; padding: 20px; }
   .screen h1 { font-size: 34px; letter-spacing: .04em; color: #aee2ff; text-shadow: 0 0 18px rgba(90,160,255,.65); }
+  #startIcon { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
   .screen p { color: #b9c6ee; font-size: 14px; line-height: 1.7; max-width: 430px; }
   .screen input { pointer-events: auto; font-size: 17px; padding: 10px 14px; border-radius: 10px; border: 1px solid #54679f;
                   background: #131a33; color: #fff; width: 240px; text-align: center; }
@@ -56,6 +57,7 @@
   @media (max-height: 500px) {
     .screen { justify-content: flex-start; gap: 7px; padding: 10px; }
     .screen h1 { font-size: 23px; }
+    #startIcon { width: 58px; height: 58px; border-radius: 14px; }
     .screen p { font-size: 11.5px; line-height: 1.5; max-width: 86vw; }
     .screen input { padding: 7px 12px; font-size: 15px; }
     .screen button { padding: 8px 26px; font-size: 16px; }
@@ -88,13 +90,14 @@
 
 <div id="pi-gate">
   <img src="app-icon-1024.png" alt="">
-  <h1>スネークパーク</h1>
+  <h1>Snake Park</h1>
   <p id="piStatus">Piに接続しています…</p>
   <p id="piHint" class="hidden"></p>
 </div>
 
 <div id="startScr" class="screen">
-  <h1 id="titleTxt">スネークパーク</h1>
+  <img id="startIcon" src="app-icon-1024.png" alt="">
+  <h1 id="titleTxt">Snake Park</h1>
   <p id="descTxt">光る粒を食べて長くなろう。他の蛇の体に頭が当たると負け。逆に、自分の体に当てさせれば相手が粒になって食べられる。押している間はブースト（速くなる代わりに少しずつ短くなる）。</p>
   <div class="langrow"><button class="langbtn" data-lang="ja">日本語</button><button class="langbtn" data-lang="en">English</button></div>
   <div class="langrow"><button class="langbtn bgmbtn">BGM：オン</button></div>
@@ -250,7 +253,7 @@ const BOT_NAMES = ['Pochi','Hana','Sora','Mugi','Coco','Rin','Taro','Yuki','Mame
 let LANG = 'ja';
 try { LANG = localStorage.getItem('snakeLang') || 'ja'; } catch (e) {}
 const STR = {
-  ja: { title: 'スネークパーク', desc: '光る粒を食べて長くなろう。他の蛇の体に頭が当たると負け。逆に、自分の体に当てさせれば相手が粒になって食べられる。押している間はブースト（速くなる代わりに少しずつ短くなる）。',
+  ja: { title: 'Snake Park', desc: '光る粒を食べて長くなろう。他の蛇の体に頭が当たると負け。逆に、自分の体に当てさせれば相手が粒になって食べられる。押している間はブースト（速くなる代わりに少しずつ短くなる）。',
         ph: '名前（例：アキラ）', play: 'あそぶ', how: 'PC：マウスで向き、押している間ブースト／ スマホ：触れた所からドラッグで向き（スティック操作）、右下ボタン長押しでブースト。横画面でも遊べます',
         len: '長さ', rank: '順位', board: 'ランキング', boost: 'ブースト', over: 'ゲームオーバー', again: 'もう一度',
         finalLen: '最終の長さ： ', you: 'あなた', youDown: 'あなたは倒れた…', down: ' が倒れた', by: '（', byEnd: '）',
@@ -912,7 +915,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v14';
+document.getElementById('verTag').textContent = 'Snake Park Pi v15';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
