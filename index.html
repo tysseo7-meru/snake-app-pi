@@ -520,7 +520,7 @@ function startSync() {
         for (const [id, r] of remotes) if (now - r.seenAt > 6000) remotes.delete(id);
         topUpBots();
       }, () => { /* snapshot error: stay solo */ });
-      setInterval(publishNow, 120);
+      setInterval(publishNow, 600); // 600 ms: the Firestore free quota is 20k writes/day — 120 ms publishing burned it in under an hour of total play
       setInterval(() => { const now = Date.now(); for (const [id, r] of remotes) if (now - r.seenAt > 6000) remotes.delete(id); }, 2500);
     })
     .catch(() => { /* offline: solo mode */ });
@@ -696,7 +696,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v5';
+document.getElementById('verTag').textContent = 'Snake Park Pi v6';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
