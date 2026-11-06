@@ -637,16 +637,19 @@ function scoresCol() {
   return fbScores;
 }
 function submitScore() {
-  const sc = Math.floor(player.score);
   const col = scoresCol();
-  if (!col || sc <= 0 || !myId) return;
+  if (!col || !myId) return;
   try {
-    const ref = col.doc(myId); // one doc per player: only a new best replaces it
-    ref.get().then(snap => {
-      const prev = snap.exists ? ((snap.data() || {}).score || 0) : 0;
-      if (sc > prev) ref.set({ name: String(player.name || '???').slice(0, 24), score: sc, t: Date.now() }).then(() => renderGlobalScores()).catch(() => {});
-      else renderGlobalScores();
-    }).catch(() => {});
+    // Write the local best (the local list is already collapsed to one row
+    // per name and includes this run) with ONE immediate set() — the same
+    // mechanism as the online presence writes. No read first: a read-then-
+    // write chain at game over can die silently if the app closes or the
+    // read stalls, which is why no scores landed at all before this fix.
+    const mine = loadHighScores().find(e => e.name === player.name);
+    const best = mine ? Math.floor(mine.score) : Math.floor(player.score);
+    if (best <= 0) return;
+    col.doc(myId).set({ name: String(player.name || '???').slice(0, 24), score: best, t: Date.now() })
+      .then(() => renderGlobalScores()).catch(() => {});
   } catch (e) {}
 }
 function renderGlobalScores() {
@@ -693,7 +696,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v4';
+document.getElementById('verTag').textContent = 'Snake Park Pi v5';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
