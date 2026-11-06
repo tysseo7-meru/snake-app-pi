@@ -124,14 +124,14 @@ const STR = {
         ph: '名前（例：アキラ）', play: 'あそぶ', how: 'PC：マウスで向き、押している間ブースト／ スマホ：指で向き、下のボタンでブースト',
         len: '長さ', rank: '順位', board: 'ランキング', boost: 'ブースト', over: 'ゲームオーバー', again: 'もう一度',
         finalLen: '最終の長さ： ', you: 'あなた', youDown: 'あなたは倒れた…', down: ' が倒れた', by: '（', byEnd: '）',
-        bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア',
+        bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア', hsAll: 'みんなのハイスコア',
         piStep1: 'Piに接続しています…', piStep2: 'Piでサインインしています…', piStep3: '確認しています…',
         piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。' },
   en: { title: 'Snake Park', desc: 'Eat the glowing orbs to grow longer. If your head touches another snake\'s body, you lose. Make others crash into you and eat the orbs they drop. Hold to boost (faster, but you slowly shrink).',
         ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: steer with your finger, use the button to boost',
         len: 'Length', rank: 'Rank', board: 'Ranking', boost: 'BOOST', over: 'Game Over', again: 'Play again',
         finalLen: 'Final length: ', you: 'You', youDown: 'You went down…', down: ' went down', by: ' (by ', byEnd: ')',
-        bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores',
+        bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores', hsAll: "Everyone's High Scores",
         piStep1: 'Connecting to Pi…', piStep2: 'Signing in with Pi…', piStep3: 'Verifying…',
         piNg: 'Could not sign in. Open this app from its link in the Pi Browser.' }
 };
@@ -612,10 +612,45 @@ function recordHighScore() {
 function renderHighScores() {
   const el = document.getElementById('hsList');
   if (!el) return;
+  const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hs');
   const list = loadHighScores();
   el.innerHTML = list.length
     ? list.slice(0, 10).map((e, i) => `<div class="${lastEntry && e.name === lastEntry.name && e.score === lastEntry.score && e.date === lastEntry.date ? 'me' : ''}">${i + 1}. ${esc(e.name)}　${e.score}</div>`).join('')
     : '<div>-</div>';
+}
+
+// ---------------- shared high scores (Firestore: snakeScores) ----------------
+// Every finished run is submitted to the shared collection; the game-over
+// table then shows everyone's top 10 together, highest score first (own
+// latest run highlighted). If the shared list cannot be loaded, the local
+// list simply stays.
+let fbScores = null, lastScoreId = null;
+function scoresCol() {
+  if (fbScores) return fbScores;
+  if (fbDb) { try { fbScores = fbDb.collection('snakeScores'); } catch (e) { fbScores = null; } }
+  return fbScores;
+}
+function submitScore() {
+  const sc = Math.floor(player.score);
+  const col = scoresCol();
+  if (!col || sc <= 0) return;
+  try {
+    col.add({ name: String(player.name || '???').slice(0, 24), score: sc, t: Date.now() })
+      .then(ref => { lastScoreId = ref.id; renderGlobalScores(); })
+      .catch(() => {});
+  } catch (e) {}
+}
+function renderGlobalScores() {
+  const col = scoresCol();
+  if (!col) return;
+  col.orderBy('score', 'desc').limit(50).get().then(snap => {
+    const rows = [];
+    snap.forEach(d => { const v = d.data(); if (v && typeof v.score === 'number') rows.push({ id: d.id, name: String(v.name || '???'), score: v.score }); });
+    if (!rows.length) return;
+    const el = document.getElementById('hsList'); if (!el) return;
+    const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hsAll');
+    el.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="${r.id === lastScoreId ? 'me' : ''}">${i + 1}. ${esc(r.name)}　${Math.floor(r.score)}</div>`).join('');
+  }).catch(() => {});
 }
 
 // ---------------- screens ----------------
@@ -634,6 +669,7 @@ function gameOver() {
   document.getElementById('overStats').textContent = T('finalLen') + Math.floor(player.score);
   setTimeout(() => overScr.classList.remove('hidden'), 650); // show the screen first: scoring must never block it
   try { recordHighScore(); } catch (e) {}
+  try { submitScore(); renderGlobalScores(); } catch (e) {}
 }
 document.getElementById('playBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
@@ -648,7 +684,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v2';
+document.getElementById('verTag').textContent = 'Snake Park Pi v3';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
