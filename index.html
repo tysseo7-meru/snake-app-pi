@@ -119,7 +119,7 @@
 // ---------------- world constants ----------------
 const ARENA_R = 2200;            // arena radius (world units)
 const ORB_COUNT = 650;
-const BOT_COUNT = 11;
+const BOT_COUNT = 19; // 20 snakes in total, player included
 const BASE_SPEED = 2.35, BOOST_SPEED = 4.35;
 const TURN = 0.095;              // max turn per frame (rad)
 const SEG = 4.2;                 // trail point spacing
@@ -249,7 +249,7 @@ function hexTile() {
   _hexTile = c;
   return c;
 }
-const BOT_NAMES = ['Pochi','Hana','Sora','Mugi','Coco','Rin','Taro','Yuki','Mame','Fuku','Saku'];
+const BOT_NAMES = ['Pochi','Hana','Sora','Mugi','Coco','Rin','Taro','Yuki','Mame','Fuku','Saku','Kiki','Momo','Nana','Peko','Toto','Umi','Waka','Lulu'];
 let LANG = 'ja';
 try { LANG = localStorage.getItem('snakeLang') || 'ja'; } catch (e) {}
 const STR = {
@@ -915,7 +915,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v15';
+document.getElementById('verTag').textContent = 'Snake Park Pi v16';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
