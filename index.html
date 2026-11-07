@@ -118,7 +118,7 @@
 "use strict";
 // ---------------- world constants ----------------
 const ARENA_R = 2200;            // arena radius (world units)
-const ORB_COUNT = 650;
+const ORB_COUNT = 1300; // food doubled (2026-11-07)
 const BOT_COUNT = 19; // 20 snakes in total, player included
 const BASE_SPEED = 2.35, BOOST_SPEED = 4.35;
 const TURN = 0.095;              // max turn per frame (rad)
@@ -915,7 +915,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v16';
+document.getElementById('verTag').textContent = 'Snake Park Pi v17';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
