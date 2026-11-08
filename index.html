@@ -855,20 +855,45 @@ function scoresCol() {
   if (fbDb) { try { fbScores = fbDb.collection('snakeScores'); } catch (e) { fbScores = null; } }
   return fbScores;
 }
+// The best score is kept in localStorage as "pending" until the server
+// confirms it holds at least that much. A failed write (network, app closed,
+// quota) is therefore retried at the next game over and on the next launch.
+// The write itself is a transaction that never lowers the value already on
+// the server, so a fresh or cleared device can no longer erase a higher
+// score by overwriting it with a lower local best.
+function pendingBest() {
+  try { const p = JSON.parse(localStorage.getItem('snakePendingBest') || 'null'); return (p && typeof p.score === 'number' && p.score > 0) ? p : null; } catch (e) { return null; }
+}
+function healLocalFromServer(name, score) {
+  if (!name || !(score > 0)) return;
+  const list = loadHighScores();
+  const row = list.find(e => e.name === name);
+  if (row && row.score >= score) return;
+  const merged = collapseScores(list.concat([{ name, score, date: row ? row.date : Date.now() }]));
+  try { localStorage.setItem('snakeHighScores', JSON.stringify(merged.slice(0, 30))); } catch (e) {}
+}
 function submitScore() {
   const col = scoresCol();
-  if (!col || !myId) return;
+  if (!col || !myId || !fbDb) return;
   try {
-    // Write the local best (the local list is already collapsed to one row
-    // per name and includes this run) with ONE immediate set() — the same
-    // mechanism as the online presence writes. No read first: a read-then-
-    // write chain at game over can die silently if the app closes or the
-    // read stalls, which is why no scores landed at all before this fix.
-    const mine = loadHighScores().find(e => e.name === player.name);
-    const best = mine ? Math.floor(mine.score) : Math.floor(player.score);
+    const mine = player ? loadHighScores().find(e => e.name === player.name) : null;
+    let best = mine ? Math.floor(mine.score) : (player ? Math.floor(player.score) : 0);
+    let name = String((player && player.name) || '???').slice(0, 24);
+    const pend = pendingBest();
+    if (pend && pend.score > best) { best = Math.floor(pend.score); name = String(pend.name || name).slice(0, 24); }
     if (best <= 0) return;
-    col.doc(myId).set({ name: String(player.name || '???').slice(0, 24), score: best, t: Date.now() })
-      .then(() => renderGlobalScores()).catch(() => {});
+    try { localStorage.setItem('snakePendingBest', JSON.stringify({ name, score: best })); } catch (e) {}
+    const ref = col.doc(myId);
+    fbDb.runTransaction(tx => tx.get(ref).then(snap => {
+      const cur = snap.exists && typeof snap.data().score === 'number' ? snap.data().score : 0;
+      if (cur >= best) return cur; // server already holds at least this much: never lower it
+      tx.set(ref, { name, score: best, t: Date.now() });
+      return best;
+    })).then(held => {
+      try { localStorage.removeItem('snakePendingBest'); } catch (e) {}
+      if (typeof held === 'number') healLocalFromServer(name, Math.floor(held));
+      renderGlobalScores();
+    }).catch(() => { /* pending stays in localStorage and is retried later */ });
   } catch (e) {}
 }
 function renderGlobalScores() {
@@ -877,6 +902,8 @@ function renderGlobalScores() {
   col.orderBy('score', 'desc').limit(50).get().then(snap => {
     const rows = [];
     snap.forEach(d => { const v = d.data(); if (v && typeof v.score === 'number') rows.push({ id: d.id, name: String(v.name || '???'), score: v.score }); });
+    const own = rows.find(r => r.id === myId);
+    if (own) healLocalFromServer(own.name, Math.floor(own.score));
     if (!rows.length) return;
     const el = document.getElementById('hsList'); if (!el) return;
     const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hsAll');
@@ -915,7 +942,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v17';
+document.getElementById('verTag').textContent = 'Snake Park Pi v18';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -961,6 +988,7 @@ async function piBoot() {
     if (ni && piUser.username) { ni.value = piUser.username; ni.readOnly = true; }
     if (gate) gate.classList.add('hidden');
     startSync();
+    setTimeout(() => { try { submitScore(); } catch (e) {} }, 1500); // retry a best score that failed to send last time
   } catch (e) { clearTimeout(watchdog); fail(); }
 }
 
