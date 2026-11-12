@@ -42,7 +42,8 @@
                    box-shadow: 0 4px 18px rgba(60,130,255,.5); }
   #overStats { font-size: 16px; color: #ffd76a; }
   #hsBox { background: rgba(10,14,30,.62); border: 1px solid rgba(140,160,255,.25); border-radius: 10px;
-           padding: 10px 18px; min-width: 250px; font-size: 14px; line-height: 1.65; text-align: left; }
+           padding: 10px 18px; min-width: 250px; font-size: 14px; line-height: 1.65; text-align: left;
+           max-height: 46vh; overflow-y: auto; }
   #hsBox h3 { font-size: 12px; color: #9fb4ff; letter-spacing: .08em; margin-bottom: 2px; text-align: center; }
   #hsList .me { color: #ffd76a; font-weight: 700; }
   .langrow { display: flex; gap: 8px; }
@@ -840,13 +841,13 @@ function renderHighScores() {
   const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hs');
   const list = loadHighScores();
   el.innerHTML = list.length
-    ? list.slice(0, 10).map((e, i) => `<div class="${lastEntry && e.name === lastEntry.name && e.score === lastEntry.score && e.date === lastEntry.date ? 'me' : ''}">${i + 1}. ${esc(e.name)}　${e.score}</div>`).join('')
+    ? list.slice(0, 20).map((e, i) => `<div class="${lastEntry && e.name === lastEntry.name && e.score === lastEntry.score && e.date === lastEntry.date ? 'me' : ''}">${i + 1}. ${esc(e.name)}　${e.score}</div>`).join('')
     : '<div>-</div>';
 }
 
 // ---------------- shared high scores (Firestore: snakeScores) ----------------
 // One document per player (doc id = player id) holding only their BEST
-// score; the game-over table shows everyone's top 10, highest first, with
+// score; the game-over table shows everyone's top 20, highest first, with
 // the player's own row highlighted. If the shared list cannot be loaded,
 // the local list simply stays.
 let fbScores = null;
@@ -907,7 +908,7 @@ function renderGlobalScores() {
     if (!rows.length) return;
     const el = document.getElementById('hsList'); if (!el) return;
     const t = document.getElementById('hsTitle'); if (t) t.textContent = T('hsAll');
-    el.innerHTML = rows.slice(0, 10).map((r, i) => `<div class="${r.id === myId ? 'me' : ''}">${i + 1}. ${esc(r.name)}　${Math.floor(r.score)}</div>`).join('');
+    el.innerHTML = rows.slice(0, 20).map((r, i) => `<div class="${r.id === myId ? 'me' : ''}">${i + 1}. ${esc(r.name)}　${Math.floor(r.score)}</div>`).join('');
   }).catch(() => {});
 }
 
@@ -942,7 +943,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v19';
+document.getElementById('verTag').textContent = 'Snake Park Pi v20';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
