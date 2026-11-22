@@ -638,35 +638,77 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
-// ---------------- BGM (WebAudio synthesis, original loop) ----------------
+// ---------------- BGM (WebAudio synthesis) ----------------
+// Melody of "Party Pooper" (Leon Riskin), transcribed from the song and
+// re-synthesized here with a shamisen-like plucked-string sound
+// (Karplus-Strong); the original audio is not used. Tempo about 120 BPM.
+// Event times are seconds within one 24-second loop, with the song's
+// own timing and accents: [time, midi, volume].
 let bgmOn = true;
 try { bgmOn = localStorage.getItem('snakeBgm') !== 'off'; } catch (e) {}
-let actx = null, master = null, bgmTimer = null, nextBeat = 0, beatIdx = 0;
-const BEAT = 60 / 116;
-const BARS = [
-  { root: 48, tones: [60, 64, 67] }, { root: 43, tones: [59, 62, 67] },
-  { root: 45, tones: [60, 64, 69] }, { root: 41, tones: [60, 65, 69] },
-  { root: 48, tones: [60, 64, 67] }, { root: 43, tones: [59, 62, 67] },
-  { root: 41, tones: [60, 65, 69] }, { root: 43, tones: [59, 62, 67] }
-];
-const LEAD = [76,79,84,79, 74,79,83,79, 81,76,81,84, 81,77,81,79,
-              76,79,76,72, 74,71,74,79, 77,81,79,76, 74,71,67,0];
+let actx = null, master = null, bgmTimer = null, bgmLoopStart = 0, bgmLeadIdx = 0, bgmBassIdx = 0, bgmEvt = 0;
+const BGM_LOOP = 24.0;
+const BGM_LEAD=[[0.465,72,0.41],[0.817,72,0.40],[0.981,74,0.35],[1.319,73,0.30],[1.481,74,0.44],[1.820,68,0.32],[1.983,74,0.37],[2.321,70,0.39],[2.483,72,0.37],[2.823,70,0.31],[2.971,73,0.37],[3.486,74,0.53],[3.973,73,0.33],[4.489,73,0.45],[4.976,74,0.41],[5.463,62,0.51],[5.979,74,0.38],[6.330,72,0.37],[6.493,70,0.37],[6.832,74,0.31],[6.981,72,0.40],[7.482,63,0.66],[7.983,79,0.52],[8.484,72,0.59],[8.985,78,0.43],[9.487,72,0.34],[9.975,79,0.43],[10.462,72,0.36],[10.963,59,0.34],[11.491,72,0.53],[11.817,74,0.43],[11.979,75,0.31],[12.317,72,0.39],[12.480,79,0.61],[12.819,84,0.44],[12.981,78,0.34],[13.469,72,0.36],[13.983,79,0.56],[14.471,72,0.42],[14.973,50,0.39],[15.473,72,0.30],[16.503,72,0.39],[16.963,50,0.33],[17.465,72,0.41],[18.494,69,0.46],[18.969,55,0.39],[19.483,62,0.33],[19.984,86,0.25],[20.485,71,0.33],[20.973,51,0.36],[21.323,67,0.31],[21.499,70,0.40],[21.823,74,0.29],[22.000,72,0.35],[22.325,70,0.37],[22.487,74,0.36],[22.827,70,0.32],[22.975,67,0.35],[23.489,72,0.39],[23.829,74,0.38],[23.991,70,0.31]];
+const BGM_BASS=[[0.493,63,0.15],[0.981,48,0.26],[1.481,63,0.20],[1.983,43,0.16],[2.471,63,0.20],[2.809,63,0.18],[2.985,50,0.22],[3.459,62,0.15],[3.987,45,0.17],[4.489,61,0.18],[4.976,55,0.32],[5.463,62,0.16],[5.992,50,0.18],[6.479,62,0.19],[6.805,54,0.18],[7.482,63,0.19],[7.983,43,0.21],[8.484,63,0.19],[8.985,48,0.24],[9.459,63,0.15],[9.988,43,0.17],[10.462,63,0.20],[21.092,48,0.12],[21.309,60,0.12],[21.485,63,0.14],[21.987,43,0.16],[22.325,63,0.12],[22.460,62,0.18],[22.813,63,0.11],[22.975,48,0.22],[23.489,63,0.15],[23.815,62,0.12],[23.977,43,0.18]];
 function midiHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-function tone(m, t, dur, type, vol) {
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = type; o.frequency.value = midiHz(m);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g); g.connect(master);
-  o.start(t); o.stop(t + dur + 0.05);
+const ksCache = {};
+function ksBuffer(m) {
+  if (ksCache[m]) return ksCache[m];
+  const sr = actx.sampleRate, f = midiHz(m), D = Math.max(2, Math.round(sr / f));
+  const len = Math.floor(sr * 1.0);
+  const buf = actx.createBuffer(1, len, sr), out = buf.getChannelData(0);
+  const ring = new Float32Array(D);
+  let prev = Math.random() * 2 - 1;
+  for (let i = 0; i < D; i++) { const v = Math.random() * 2 - 1; ring[i] = v - prev; prev = v; }
+  let g = 0.996 - (m - 60) * 0.0006; g = Math.min(0.997, Math.max(0.985, g));
+  let idx = 0;
+  for (let n = 0; n < len; n++) {
+    const cur = ring[idx], nxt = ring[(idx + 1) % D];
+    ring[idx] = g * 0.5 * (cur + nxt);
+    out[n] = cur;
+    idx = (idx + 1) % D;
+  }
+  const cl = Math.floor(sr * 0.004);
+  for (let n = 0; n < cl; n++) out[n] += (Math.random() * 2 - 1) * Math.exp(-n / (0.0012 * sr)) * 0.9;
+  const kl = Math.floor(sr * 0.03);
+  for (let n = 0; n < kl; n++) out[n] += Math.sin(2 * Math.PI * 180 * n / sr) * Math.exp(-n / (0.008 * sr)) * 0.25;
+  ksCache[m] = buf;
+  return buf;
 }
-function scheduleBeat(i, t) {
-  const bar = BARS[(i / 4 | 0) % 8], inBar = i % 4;
-  const lead = LEAD[i % 32];
-  if (lead) tone(lead, t, BEAT * 0.92, 'triangle', 0.15);
-  tone(inBar % 2 === 0 ? bar.root : bar.root + 7, t, BEAT * 0.95, 'sine', 0.13);
-  tone(bar.tones[(i + 1) % 3] + 12, t + BEAT / 2, BEAT * 0.4, 'sine', 0.032);
+function pluck(m, t, vol) {
+  const src = actx.createBufferSource(); src.buffer = ksBuffer(m);
+  const g = actx.createGain(); g.gain.value = vol;
+  src.connect(g); g.connect(master);
+  src.start(t);
+}
+function bassThump(m, t, vol) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine'; o.frequency.value = midiHz(m);
+  const o2 = actx.createOscillator(), g2 = actx.createGain();
+  o2.type = 'sine'; o2.frequency.value = midiHz(m) * 2;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  g2.gain.setValueAtTime(vol * 0.35, t);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  o.connect(g); g.connect(master); o2.connect(g2); g2.connect(master);
+  o.start(t); o.stop(t + 0.32); o2.start(t); o2.stop(t + 0.32);
+}
+function bgmTick() {
+  const horizon = actx.currentTime + 0.18;
+  for (;;) {
+    const lt = BGM_LEAD[bgmLeadIdx], bt = BGM_BASS[bgmBassIdx];
+    const lWhen = lt ? bgmLoopStart + lt[0] : Infinity;
+    const bWhen = bt ? bgmLoopStart + bt[0] : Infinity;
+    const when = Math.min(lWhen, bWhen);
+    if (when > horizon) break;
+    const at = Math.max(when, actx.currentTime);
+    if (lWhen <= bWhen) { pluck(lt[1], at, lt[2] * 0.9); bgmLeadIdx++; }
+    else { bassThump(bt[1], at, bt[2]); bgmBassIdx++; }
+    bgmEvt++;
+    if (bgmLeadIdx >= BGM_LEAD.length && bgmBassIdx >= BGM_BASS.length) {
+      bgmLeadIdx = 0; bgmBassIdx = 0; bgmLoopStart += BGM_LOOP;
+    }
+  }
 }
 function bgmStart() {
   if (!bgmOn) return;
@@ -675,10 +717,9 @@ function bgmStart() {
   if (!actx) { actx = new AC(); master = actx.createGain(); master.gain.value = 0.9; master.connect(actx.destination); }
   if (actx.state === 'suspended') actx.resume();
   if (bgmTimer) return;
-  beatIdx = 0; nextBeat = actx.currentTime + 0.06;
-  bgmTimer = setInterval(() => {
-    while (nextBeat < actx.currentTime + 0.14) { scheduleBeat(beatIdx, nextBeat); nextBeat += BEAT; beatIdx++; }
-  }, 42);
+  bgmLeadIdx = 0; bgmBassIdx = 0; bgmEvt = 0;
+  bgmLoopStart = actx.currentTime + 0.06;
+  bgmTimer = setInterval(bgmTick, 42);
 }
 function bgmStop() {
   if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
@@ -952,7 +993,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v20';
+document.getElementById('verTag').textContent = 'Snake Park Pi v23';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
