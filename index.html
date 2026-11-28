@@ -1007,7 +1007,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v26';
+document.getElementById('verTag').textContent = 'Snake Park Pi v27';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -1067,7 +1067,13 @@ async function piBoot() {
     piSetStatus(T('piStep2'));
     const auth = await Pi.authenticate(['username', 'payments'], onIncompletePaymentFound);
     piSetStatus(T('piStep3'));
-    const res = await fetch('https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com/pi/auth/v1/login', {
+    // Identity check: the Production (console) app verifies the token with
+    // Pi itself via our own /api/auth; the testnet App Studio app keeps the
+    // App Studio exchange (its tokens are issued for that app, not this one).
+    const exchangeUrl = location.hostname === 'snake-app-pi.pages.dev'
+      ? '/api/auth'
+      : 'https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com/pi/auth/v1/login';
+    const res = await fetch(exchangeUrl, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken: auth.accessToken })
     });
