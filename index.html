@@ -107,6 +107,12 @@
 
 <div id="startScr" class="screen">
   <img id="startIcon" src="app-icon-1024.png" alt="">
+  <script>
+  if (location.hostname === 'snake-app-pi.pages.dev') {
+    document.querySelector('#pi-gate img').src = 'app-icon-mainnet.png';
+    document.getElementById('startIcon').src = 'app-icon-mainnet.png';
+  }
+  </script>
   <h1 id="titleTxt">Snake Park</h1>
   <p id="descTxt">光る粒を食べて長くなろう。他の蛇の体に頭が当たると負け。逆に、自分の体に当てさせれば相手が粒になって食べられる。押している間はブースト（速くなる代わりに少しずつ短くなる）。</p>
   <div class="langrow"><button class="langbtn" data-lang="ja">日本語</button><button class="langbtn" data-lang="en">English</button></div>
@@ -1007,7 +1013,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v27';
+document.getElementById('verTag').textContent = 'Snake Park Pi v28';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
