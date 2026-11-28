@@ -116,7 +116,6 @@
   <button id="boostPlayBtn" style="display:block;margin:10px auto 0;padding:10px 22px;border-radius:999px;border:1px solid #c9a227;background:rgba(201,162,39,.16);color:#ffd75e;font-size:14px;cursor:pointer">常時ブーストであそぶ（0.1 Pi）</button>
   <p id="payMsg" style="font-size:12px;color:#ffb3b3;min-height:16px;margin:6px 0 0"></p>
   <p id="howTxt" style="font-size:12px;color:#7e8cbd">PC：マウスで向き、押している間ブースト／ スマホ：指で向き、下のボタンでブースト</p>
-  <a id="testBoostLink" href="#" style="font-size:11px;color:#55608a;text-decoration:underline">テスト用：常時ブースト（無料）</a>
 </div>
 
 <div id="overScr" class="screen hidden">
@@ -295,7 +294,7 @@ function applyLang() {
   document.title = T('title');
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('titleTxt', T('title')); set('descTxt', T('desc')); set('playBtn', T('play')); set('howTxt', T('how'));
-  set('boostPlayBtn', T('boostPlay')); set('testBoostLink', T('testBoost'));
+  set('boostPlayBtn', T('boostPlay'));
   set('lenLabel', T('len')); set('rankLabel', T('rank')); set('boardTitle', T('board'));
   set('boostBtn', T('boost')); set('overTxt', T('over')); set('againBtn', T('again')); set('hsTitle', T('hs'));
   const ni = document.getElementById('nameIn'); if (ni) ni.placeholder = T('ph');
@@ -973,12 +972,13 @@ function renderGlobalScores() {
 
 // ---------------- screens ----------------
 const startScr = document.getElementById('startScr'), overScr = document.getElementById('overScr');
-let startBoostMode = false; // one-game Always Boost, set by the paid button or the test link
+let startBoostMode = false; // one-game Always Boost, set by the paid button
+const TEST_BOOST = new URLSearchParams(location.search).get('testboost') === '1'; // hidden test switch: ?testboost=1
 function startGame() {
   const name = document.getElementById('nameIn').value.trim() || T('you');
   try { localStorage.setItem('snakeName', name); } catch (e) {}
   spawnWorld(name);
-  if (player) player.alwaysBoost = startBoostMode;
+  if (player) player.alwaysBoost = startBoostMode || TEST_BOOST;
   startBoostMode = false; // the unlock lasts for this one game only
   boostBtn.classList.toggle('on', !!(player && player.alwaysBoost));
   bgmStart();
@@ -1007,7 +1007,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v25';
+document.getElementById('verTag').textContent = 'Snake Park Pi v26';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -1032,7 +1032,6 @@ async function postJson(path, obj) {
 }
 // ---------------- Always Boost: 0.1 Pi for one game (plus a free test link) ----------------
 function startBoostGame() { startBoostMode = true; startGame(); }
-document.getElementById('testBoostLink').addEventListener('click', e => { e.preventDefault(); startBoostGame(); });
 document.getElementById('boostPlayBtn').addEventListener('click', () => {
   const msg = document.getElementById('payMsg');
   if (!window.Pi || typeof Pi.createPayment !== 'function') { msg.textContent = T('payNg'); return; }
