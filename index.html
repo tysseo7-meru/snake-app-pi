@@ -113,7 +113,10 @@
   <div class="langrow"><button class="langbtn bgmbtn">BGM：オン</button></div>
   <input id="nameIn" maxlength="12" placeholder="名前（例：アキラ）">
   <button id="playBtn">あそぶ</button>
+  <button id="boostPlayBtn" style="display:block;margin:10px auto 0;padding:10px 22px;border-radius:999px;border:1px solid #c9a227;background:rgba(201,162,39,.16);color:#ffd75e;font-size:14px;cursor:pointer">常時ブーストであそぶ（0.1 Pi）</button>
+  <p id="payMsg" style="font-size:12px;color:#ffb3b3;min-height:16px;margin:6px 0 0"></p>
   <p id="howTxt" style="font-size:12px;color:#7e8cbd">PC：マウスで向き、押している間ブースト／ スマホ：指で向き、下のボタンでブースト</p>
+  <a id="testBoostLink" href="#" style="font-size:11px;color:#55608a;text-decoration:underline">テスト用：常時ブースト（無料）</a>
 </div>
 
 <div id="overScr" class="screen hidden">
@@ -270,7 +273,9 @@ const STR = {
         bgmOn: 'BGM：オン', bgmOff: 'BGM：オフ', online: 'オンライン', hs: 'ハイスコア', hsAll: 'みんなのハイスコア',
         piStep1: 'Piに接続しています…', piStep2: 'Piでサインインしています…', piStep3: '確認しています…',
         piNg: 'サインインできませんでした。Piブラウザで、アプリのリンクから開いてください。',
-        piHint: 'このブラウザではサインインできません。Piブラウザで開いてください。' },
+        piHint: 'このブラウザではサインインできません。Piブラウザで開いてください。',
+        boostPlay: '常時ブーストであそぶ（0.1 Pi）', testBoost: 'テスト用：常時ブースト（無料）',
+        payWait: '支払いの手続き中です…', payNg: '支払いが完了しませんでした。' },
   en: { title: 'Snake Park', desc: 'Eat the glowing orbs to grow longer. If your head touches another snake\'s body, you lose. Make others crash into you and eat the orbs they drop. Hold to boost (faster, but you slowly shrink).',
         ph: 'Name (e.g. Alex)', play: 'Play', how: 'PC: steer with the mouse, hold to boost / Phone: drag anywhere to steer (joystick), hold the button to boost. Landscape works too',
         len: 'Length', rank: 'Rank', board: 'Ranking', boost: 'BOOST', over: 'Game Over', again: 'Play again',
@@ -278,7 +283,9 @@ const STR = {
         bgmOn: 'BGM: On', bgmOff: 'BGM: Off', online: 'Online', hs: 'High Scores', hsAll: "Everyone's High Scores",
         piStep1: 'Connecting to Pi…', piStep2: 'Signing in with Pi…', piStep3: 'Verifying…',
         piNg: 'Could not sign in. Open this app from its link in the Pi Browser.',
-        piHint: 'Sign-in is not available in this browser. Please open this app in the Pi Browser.' }
+        piHint: 'Sign-in is not available in this browser. Please open this app in the Pi Browser.',
+        boostPlay: 'Play with Always Boost (0.1 Pi)', testBoost: 'Test: Always Boost (free)',
+        payWait: 'Processing your payment…', payNg: 'The payment did not complete.' }
 };
 if (!STR[LANG]) { LANG = 'ja'; try { localStorage.setItem('snakeLang', LANG); } catch (e) {} } // heal a bad stored language value
 function T(k) { const d = STR[LANG] || STR.ja; const v = d[k]; return v !== undefined ? v : k; }
@@ -288,6 +295,7 @@ function applyLang() {
   document.title = T('title');
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('titleTxt', T('title')); set('descTxt', T('desc')); set('playBtn', T('play')); set('howTxt', T('how'));
+  set('boostPlayBtn', T('boostPlay')); set('testBoostLink', T('testBoost'));
   set('lenLabel', T('len')); set('rankLabel', T('rank')); set('boardTitle', T('board'));
   set('boostBtn', T('boost')); set('overTxt', T('over')); set('againBtn', T('again')); set('hsTitle', T('hs'));
   const ni = document.getElementById('nameIn'); if (ni) ni.placeholder = T('ph');
@@ -316,7 +324,7 @@ function makeSnake(name, color, isPlayer, sx, sy) {
   const a = rand(0, Math.PI * 2);
   const s = { name, color, isPlayer: !!isPlayer, alive: true,
               x: sx, y: sy, ang: a, targetAng: a,
-              score: isPlayer ? 12 : 14 + Math.random() * 50, pts: [], boost: false, aiT: 0, aiMode: 'eat', aiTx: 0, aiTy: 0 };
+              score: isPlayer ? 12 : 14 + Math.random() * 50, pts: [], boost: false, alwaysBoost: false, aiT: 0, aiMode: 'eat', aiTx: 0, aiTy: 0 };
   for (let i = 0; i < 12; i++) s.pts.push({ x: sx - Math.cos(a) * i * SEG, y: sy - Math.sin(a) * i * SEG });
   return s;
 }
@@ -404,10 +412,11 @@ function turnToward(s, dt) {
   s.ang += Math.abs(d) < m ? d : Math.sign(d) * m;
 }
 function stepSnake(s, dt) {
-  const wantBoost = s.boost && s.score > 16;
+  const freeBoost = s.isPlayer && s.alwaysBoost; // paid/test mode: always fast, never drains
+  const wantBoost = freeBoost || (s.boost && s.score > 16);
   const sp = (wantBoost ? BOOST_SPEED : BASE_SPEED) * dt;
   s.x += Math.cos(s.ang) * sp; s.y += Math.sin(s.ang) * sp;
-  if (wantBoost) { // drain + drop crumbs
+  if (wantBoost && !freeBoost) { // drain + drop crumbs
     s.score -= 0.055 * dt;
     if (Math.random() < 0.08 * dt && orbs.length < ORB_COUNT + 500) {
       const tail = s.pts[s.pts.length - 1];
@@ -964,10 +973,14 @@ function renderGlobalScores() {
 
 // ---------------- screens ----------------
 const startScr = document.getElementById('startScr'), overScr = document.getElementById('overScr');
+let startBoostMode = false; // one-game Always Boost, set by the paid button or the test link
 function startGame() {
   const name = document.getElementById('nameIn').value.trim() || T('you');
   try { localStorage.setItem('snakeName', name); } catch (e) {}
   spawnWorld(name);
+  if (player) player.alwaysBoost = startBoostMode;
+  startBoostMode = false; // the unlock lasts for this one game only
+  boostBtn.classList.toggle('on', !!(player && player.alwaysBoost));
   bgmStart();
   running = true;
   publishNow();
@@ -975,6 +988,7 @@ function startGame() {
 }
 function gameOver() {
   running = false;
+  boostBtn.classList.remove('on');
   document.getElementById('overStats').textContent = T('finalLen') + Math.floor(player.score);
   setTimeout(() => overScr.classList.remove('hidden'), 650); // show the screen first: scoring must never block it
   try { recordHighScore(); } catch (e) {}
@@ -993,7 +1007,7 @@ document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', (
 }));
 applyLang();
 piBoot();
-document.getElementById('verTag').textContent = 'Snake Park Pi v24';
+document.getElementById('verTag').textContent = 'Snake Park Pi v25';
 
 // ---------------- Pi Network sign-in (Pi Browser build) ----------------
 // App Studio flow: Pi.init -> Pi.authenticate(["username"]) -> exchange the
@@ -1003,7 +1017,38 @@ document.getElementById('verTag').textContent = 'Snake Park Pi v24';
 // gate lifts on success; on failure/timeout it stays up with guidance.
 let piUser = null, piSessionToken = null;
 function piSetStatus(t) { const el = document.getElementById('piStatus'); if (el) el.textContent = t; }
-function onIncompletePaymentFound(payment) { if (window.console) console.log('[pi] incomplete payment (ignored - this app takes no payments)', payment && payment.identifier); }
+function onIncompletePaymentFound(payment) {
+  // Finish a payment that was interrupted earlier, if it has a transaction id.
+  try {
+    const paymentId = payment && payment.identifier;
+    const txid = payment && payment.transaction && payment.transaction.txid;
+    if (paymentId && txid) postJson('/api/complete', { paymentId, txid }).catch(() => {});
+  } catch (e) {}
+}
+async function postJson(path, obj) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
+  if (!r.ok) throw new Error(path + ' ' + r.status);
+  return r.json().catch(() => ({}));
+}
+// ---------------- Always Boost: 0.1 Pi for one game (plus a free test link) ----------------
+function startBoostGame() { startBoostMode = true; startGame(); }
+document.getElementById('testBoostLink').addEventListener('click', e => { e.preventDefault(); startBoostGame(); });
+document.getElementById('boostPlayBtn').addEventListener('click', () => {
+  const msg = document.getElementById('payMsg');
+  if (!window.Pi || typeof Pi.createPayment !== 'function') { msg.textContent = T('payNg'); return; }
+  msg.textContent = T('payWait');
+  try {
+    Pi.createPayment({ amount: 0.1, memo: 'Snake Park: Always Boost (one game)', metadata: { feature: 'always_boost_one_game' } }, {
+      onReadyForServerApproval: async paymentId => { try { await postJson('/api/approve', { paymentId }); } catch (e) { showErr('approve: ' + e.message); } },
+      onReadyForServerCompletion: async (paymentId, txid) => {
+        try { await postJson('/api/complete', { paymentId, txid }); msg.textContent = ''; startBoostGame(); }
+        catch (e) { msg.textContent = T('payNg'); showErr('complete: ' + e.message); }
+      },
+      onCancel: () => { msg.textContent = T('payNg'); },
+      onError: err => { msg.textContent = T('payNg'); showErr('payment: ' + (err && err.message)); }
+    });
+  } catch (e) { msg.textContent = T('payNg'); showErr('createPayment: ' + e.message); }
+});
 async function piBoot() {
   const gate = document.getElementById('pi-gate');
   // Opened outside Pi Browser (e.g. Safari): sign-in can never complete
@@ -1021,7 +1066,7 @@ async function piBoot() {
     piSetStatus(T('piStep1'));
     await Pi.init({ version: '2.0' });
     piSetStatus(T('piStep2'));
-    const auth = await Pi.authenticate(['username'], onIncompletePaymentFound);
+    const auth = await Pi.authenticate(['username', 'payments'], onIncompletePaymentFound);
     piSetStatus(T('piStep3'));
     const res = await fetch('https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com/pi/auth/v1/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
